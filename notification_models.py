@@ -10,6 +10,12 @@ class FarmerContext(BaseModel):
     location: str
 
 
+class WeatherAdvisoryRequest(BaseModel):
+    farmer: FarmerContext
+    lat: float
+    lon: float
+
+
 class Notification(BaseModel):
     type: str
     priority: str

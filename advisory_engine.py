@@ -1,6 +1,3 @@
-from crop_profiles import CROP_PROFILES
-
-
 def generate_personalized_notifications(
     farmer,
     current_weather,
@@ -9,24 +6,13 @@ def generate_personalized_notifications(
 
     notifications = []
 
-    crop = farmer["crop"].lower()
+    crop = farmer["crop"]
     growth_stage = farmer.get("growth_stage")
     planned_activity = farmer.get("planned_activity")
     location = farmer["location"]
 
-    crop_profile = CROP_PROFILES.get(
-        crop,
-        {
-            "name": farmer["crop"],
-            "activities": [],
-            "high_humidity_monitoring": False
-        }
-    )
-
-    crop_name = crop_profile["name"]
-
     # ---------------------------------------------------------
-    # FIND FORECAST CONDITIONS
+    # FORECAST ANALYSIS
     # ---------------------------------------------------------
 
     max_rain_probability = max(
@@ -44,27 +30,32 @@ def generate_personalized_notifications(
         for item in forecast
     )
 
+    max_wind = max(
+        item.get("wind_speed", 0)
+        for item in forecast
+    ) if forecast else current_weather["wind_speed"]
+
     # ---------------------------------------------------------
-    # RAIN + IRRIGATION
+    # IRRIGATION
     # ---------------------------------------------------------
 
     if (
-        planned_activity == "irrigation"
+        planned_activity
+        and planned_activity.lower() == "irrigation"
         and max_rain_probability >= 60
     ):
 
         notifications.append({
-
             "type": "irrigation",
             "priority": "medium",
 
-            "title": f"{crop_name} Irrigation Advisory",
+            "title": f"{crop} Irrigation Advisory",
 
             "message": (
                 f"Rain probability is {max_rain_probability:.0f}% "
-                f"at {location}. Rainfall is expected during the "
-                f"upcoming forecast period. Consider delaying the "
-                f"planned irrigation for your {crop_name} crop."
+                f"in {location}. Rainfall is expected during the "
+                f"upcoming forecast period. Consider delaying "
+                f"irrigation for your {crop} crop."
             ),
 
             "action": "Consider delaying irrigation",
@@ -74,39 +65,39 @@ def generate_personalized_notifications(
                 f"expected rainfall: {total_rainfall:.1f} mm"
             ),
 
-            "crop": crop_name,
+            "crop": crop,
             "activity": "irrigation"
         })
 
     # ---------------------------------------------------------
-    # RAIN + SPRAYING
+    # SPRAYING + RAIN
     # ---------------------------------------------------------
 
     if (
-        planned_activity == "spraying"
+        planned_activity
+        and planned_activity.lower() == "spraying"
         and max_rain_probability >= 60
     ):
 
-        stage_text = ""
+        stage_message = ""
 
         if growth_stage:
-            stage_text = (
-                f" Your crop is currently in the "
+            stage_message = (
+                f" Your {crop} crop is currently in the "
                 f"{growth_stage} stage."
             )
 
         notifications.append({
-
             "type": "spraying",
             "priority": "high",
 
-            "title": f"{crop_name} Spraying Advisory",
+            "title": f"{crop} Spraying Advisory",
 
             "message": (
                 f"Rain probability is {max_rain_probability:.0f}% "
-                f"in {location}. Avoid scheduling the planned "
-                f"spraying close to the expected rainfall."
-                f"{stage_text}"
+                f"in {location}. Consider postponing the planned "
+                f"spraying activity to avoid expected rainfall."
+                f"{stage_message}"
             ),
 
             "action": "Consider postponing spraying",
@@ -116,7 +107,7 @@ def generate_personalized_notifications(
                 f"{max_rain_probability:.0f}%"
             ),
 
-            "crop": crop_name,
+            "crop": crop,
             "activity": "spraying"
         })
 
@@ -125,22 +116,21 @@ def generate_personalized_notifications(
     # ---------------------------------------------------------
 
     if (
-        planned_activity == "harvesting"
+        planned_activity
+        and planned_activity.lower() == "harvesting"
         and max_rain_probability >= 70
     ):
 
         notifications.append({
-
             "type": "harvesting",
             "priority": "high",
 
-            "title": f"{crop_name} Harvest Advisory",
+            "title": f"{crop} Harvest Advisory",
 
             "message": (
                 f"Rain probability is {max_rain_probability:.0f}% "
                 f"in {location}. Review your planned harvesting "
-                f"schedule and consider the expected rainfall "
-                f"before starting field operations."
+                f"schedule before starting field operations."
             ),
 
             "action": "Review harvesting schedule",
@@ -150,7 +140,7 @@ def generate_personalized_notifications(
                 f"{max_rain_probability:.0f}%"
             ),
 
-            "crop": crop_name,
+            "crop": crop,
             "activity": "harvesting"
         })
 
@@ -158,23 +148,27 @@ def generate_personalized_notifications(
     # HIGH HUMIDITY
     # ---------------------------------------------------------
 
-    if (
-        max_humidity >= 85
-        and crop_profile.get("high_humidity_monitoring")
-    ):
+    if max_humidity >= 85:
+
+        stage_message = ""
+
+        if growth_stage:
+            stage_message = (
+                f" Your {crop} crop is in the "
+                f"{growth_stage} stage."
+            )
 
         notifications.append({
-
             "type": "humidity",
             "priority": "medium",
 
-            "title": f"{crop_name} Humidity Advisory",
+            "title": f"{crop} Humidity Advisory",
 
             "message": (
                 f"High humidity is expected in {location}. "
-                f"Monitor your {crop_name} crop for signs of "
-                f"humidity-related disease and adjust field "
-                f"activities according to crop requirements."
+                f"Monitor your {crop} crop for signs of "
+                f"humidity-related disease."
+                f"{stage_message}"
             ),
 
             "action": "Monitor crop condition",
@@ -183,8 +177,36 @@ def generate_personalized_notifications(
                 f"Forecast humidity: {max_humidity}%"
             ),
 
-            "crop": crop_name,
+            "crop": crop,
             "activity": None
+        })
+
+    # ---------------------------------------------------------
+    # STRONG WIND
+    # ---------------------------------------------------------
+
+    if max_wind >= 25:
+
+        notifications.append({
+            "type": "wind",
+            "priority": "high",
+
+            "title": f"{crop} Wind Advisory",
+
+            "message": (
+                f"Strong winds are expected in {location}. "
+                f"Consider postponing spraying and other "
+                f"wind-sensitive field activities."
+            ),
+
+            "action": "Avoid wind-sensitive activities",
+
+            "reason": (
+                f"Forecast wind speed: {max_wind:.1f} km/h"
+            ),
+
+            "crop": crop,
+            "activity": planned_activity
         })
 
     return notifications
